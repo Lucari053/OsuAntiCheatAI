@@ -90,7 +90,7 @@ def process_replay(in_replay: str | Replay, beatmap_idx: int = None, beatmap_inf
     """
     if isinstance(in_replay, str):
         replay = Replay.from_path(in_replay)
-    if isinstance(in_replay, Replay):
+    elif isinstance(in_replay, Replay):
         replay = in_replay
     else:
         raise KeyError(f"Invalid in_replay type: {type(in_replay)}")
@@ -338,6 +338,7 @@ class PrepairReplays:
                     pass
                 except Exception as e:
                     pass
+            r_dataset.flush_batch()
 
 
 

@@ -161,7 +161,6 @@ class PrepairPairs:
                 except Exception:
                     pass
             
-            pair_dataset.flush_batch()
 
 
 if __name__ == "__main__":
