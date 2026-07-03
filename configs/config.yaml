@@ -1,0 +1,17 @@
+data:
+  n_frame: 20  # Must a pair
+  n_object: 10 # Must a pair
+
+model:
+  d_model: 256
+  
+train:
+  n_epochs: 10
+  batch_size: 32
+  lr: 5e-5
+  warmup_step: 1000
+  max_windows: 300
+  val_ratio: 50 # if > 1, act like n
+  val_every_steps: 1000
+  log_every_steps: 50
+  resume: true

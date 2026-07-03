@@ -1,0 +1,20 @@
+# Process files & examples
+examples/
+temp/
+out/
+
+.env
+.vscode/
+__pycache__/
+download
+pyrightconfig.json
+
+# PyTorch checkpoints and large files
+*.pt
+*.pth
+*.zip
+*.zarr
+
+a.py
+b.py
+c.py

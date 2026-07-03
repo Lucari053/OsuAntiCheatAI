@@ -1,0 +1,11 @@
+torch
+numpy
+osrparse
+zarr
+pebble
+tqdm
+requests
+python-dotenv
+gradio
+pyyaml
+osu.py
