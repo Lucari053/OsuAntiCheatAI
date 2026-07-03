@@ -91,6 +91,8 @@ def prepair_pairs_zarr(bcheat_dataset: bool, replay_idx: int):
     bd_objects = bd_data['objects']
     
     pairs = prepair_pairs(rd_datas, bd_objects)
+    if pairs is None:
+        return None
     
     return r_hash, pairs, b_hash
 
@@ -153,13 +155,14 @@ class PrepairPairs:
             for fut in tqdm(as_completed(futures), total=len(futures)):
                 try:
                     result = fut.result()
+                        
                     if result is not None:
                         pair_dataset += result
 
                 except TimeoutError:
                     pass
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(e)
             
 
 

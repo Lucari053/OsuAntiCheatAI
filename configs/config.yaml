@@ -6,7 +6,7 @@ model:
   d_model: 256
   
 train:
-  n_epochs: 10
+  n_epochs: 20
   batch_size: 32
   lr: 5e-5
   warmup_step: 1000
