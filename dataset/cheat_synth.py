@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from osrparse import Replay, GameMode
 from osrparse import Key
 from pebble import ProcessPool
-from concurrent.futures import TimeoutError as FutureTimeoutError
+from concurrent.futures import TimeoutError as FutureTimeoutError, as_completed
 from tqdm import tqdm
 import argparse
+from enum import Enum
 
 from parser.edit_osr import patch_osr, get_beatmap_replay_hash, set_replay_hash
 from parser.beatmap_parser import BeatmapParser
@@ -17,7 +18,9 @@ from dataset.mods import apply_mods_to_difficulty
 from dataset.prepaire_replay import validate_replay
 from dataset.utils import get_beatmap_hash
 
-
+class CheatDifficulty(Enum):
+    Easy = 0
+    Hard = 1
 
 @dataclass
 class AimAssistParam:
@@ -28,14 +31,29 @@ class AimAssistParam:
     humanization:  float = 0.0
     seed:          int   = None
 
-    def random(self):
-        self.strength      = random.uniform(0.15, 1.0)
-        self.fov           = random.uniform(40.0, 200.0)
-        self.assist_window = random.uniform(25.0, 110.0)
-        self.max_speed     = random.uniform(15.0, 60.0)
-        self.humanization  = random.uniform(0.0, 0.8)
-        self.seed          = random.randint(0, 2**31 - 1)
+    def random(self, difficulty: CheatDifficulty = None):
+        if difficulty is None:
+            self.strength      = random.uniform(0.15, 1.0)
+            self.fov           = random.uniform(40.0, 200.0)
+            self.assist_window = random.uniform(25.0, 110.0)
+            self.max_speed     = random.uniform(15.0, 60.0)
+            self.humanization  = random.uniform(0.0, 0.8)
+        else:
+            match difficulty:
+                case CheatDifficulty.Easy:  # Blatant
+                    self.strength      = random.uniform(0.6, 1.0)
+                    self.fov           = random.uniform(120.0, 250.0)
+                    self.assist_window = random.uniform(70.0, 120.0)
+                    self.max_speed     = random.uniform(35.0, 70.0)
+                    self.humanization  = random.uniform(0.0, 0.2)
+                case CheatDifficulty.Hard:  # Closet
+                    self.strength      = random.uniform(0.15, 0.4)
+                    self.fov           = random.uniform(30.0, 70.0)
+                    self.assist_window = random.uniform(20.0, 50.0)
+                    self.max_speed     = random.uniform(10.0, 25.0)
+                    self.humanization  = random.uniform(0.4, 0.85)
         
+        self.seed = random.randint(0, 2**31 - 1)
 
 @dataclass
 class AimCorrectionParam:
@@ -46,13 +64,29 @@ class AimCorrectionParam:
     flow:             float = 0.2
     seed:             int   = None
 
-    def random(self):
-        self.strength         = random.uniform(0.4, 1.0)
-        self.window           = random.randint(1, 6)
-        self.tolerance_factor = random.uniform(0.5, 1.2)
-        self.landing_factor   = random.uniform(0.2, 0.7)
-        self.flow             = random.uniform(0.0, 0.35)
-        self.seed             = random.randint(0, 2**31 - 1)
+    def random(self, difficulty: CheatDifficulty = None):
+        if difficulty is None:
+            self.strength         = random.uniform(0.4, 1.0)
+            self.window           = random.randint(1, 6)
+            self.tolerance_factor = random.uniform(0.5, 1.2)
+            self.landing_factor   = random.uniform(0.2, 0.7)
+            self.flow             = random.uniform(0.0, 0.35)
+        else:
+            match difficulty:
+                case CheatDifficulty.Easy:  # Blatant
+                    self.strength         = random.uniform(0.8, 1.0)
+                    self.window           = random.randint(1, 2)
+                    self.tolerance_factor = random.uniform(0.2, 0.5)
+                    self.landing_factor   = random.uniform(0.1, 0.3)
+                    self.flow             = random.uniform(0.0, 0.1)
+                case CheatDifficulty.Hard:  # Closet
+                    self.strength         = random.uniform(0.3, 0.6)
+                    self.window           = random.randint(4, 6)
+                    self.tolerance_factor = random.uniform(0.8, 1.5)
+                    self.landing_factor   = random.uniform(0.5, 0.8)
+                    self.flow             = random.uniform(0.2, 0.45)
+        
+        self.seed = random.randint(0, 2**31 - 1)
 
 @dataclass
 class RelaxParam:
@@ -62,12 +96,25 @@ class RelaxParam:
     alternate: bool = True
     seed:      int = None
 
-    def random(self):
-        self.offset_ms = random.uniform(-25.0, 25.0)
-        self.jitter_ms = random.uniform(0.0, 14.0)
-        self.hold_ms   = random.uniform(18.0, 55.0)
-        self.alternate = random.random() < 0.9
-        self.seed      = random.randint(0, 2**31 - 1)
+    def random(self, difficulty: CheatDifficulty = None):
+        if difficulty is None:
+            self.offset_ms = random.uniform(-25.0, 25.0)
+            self.jitter_ms = random.uniform(0.0, 14.0)
+            self.hold_ms   = random.uniform(18.0, 55.0)
+            self.alternate = random.random() < 0.9
+        else:
+            self.alternate = random.random() < 0.9
+            match difficulty:
+                case CheatDifficulty.Easy:  # Blatant
+                    self.offset_ms = random.uniform(-5.0, 5.0)
+                    self.jitter_ms = random.uniform(0.0, 1.5)
+                    self.hold_ms   = random.uniform(25.0, 35.0)
+                case CheatDifficulty.Hard:  # Closet
+                    self.offset_ms = random.uniform(-20.0, 20.0)
+                    self.jitter_ms = random.uniform(4.0, 12.0)
+                    self.hold_ms   = random.uniform(15.0, 50.0)
+        
+        self.seed = random.randint(0, 2**31 - 1)
 
 @dataclass
 class HumanAutobotParam:
@@ -77,12 +124,26 @@ class HumanAutobotParam:
     spin_speed:     float = 0.05
     seed:           int   = None
 
-    def random(self):
-        self.spread         = random.uniform(0.0, 12.0)
-        self.curve_strength = random.uniform(0.0, 1.2)
-        self.spin_radius    = random.uniform(40.0, 90.0)
-        self.spin_speed     = random.uniform(0.03, 0.08)
-        self.seed           = random.randint(0, 2**31 - 1)
+    def random(self, difficulty: CheatDifficulty = None):
+        if difficulty is None:
+            self.spread         = random.uniform(0.0, 12.0)
+            self.curve_strength = random.uniform(0.0, 1.2)
+            self.spin_radius    = random.uniform(40.0, 90.0)
+            self.spin_speed     = random.uniform(0.03, 0.08)
+        else:
+            match difficulty:
+                case CheatDifficulty.Easy:  # Blatant
+                    self.spread         = random.uniform(0.0, 2.0)
+                    self.curve_strength = random.uniform(0.8, 1.2)
+                    self.spin_radius    = random.uniform(50.0, 70.0)
+                    self.spin_speed     = random.uniform(0.05, 0.08)
+                case CheatDifficulty.Hard:  # Closet
+                    self.spread         = random.uniform(4.0, 10.0)
+                    self.curve_strength = random.uniform(0.2, 0.6)
+                    self.spin_radius    = random.uniform(30.0, 80.0)
+                    self.spin_speed     = random.uniform(0.02, 0.05)
+        
+        self.seed = random.randint(0, 2**31 - 1)
 
 @dataclass
 class TapAssistParam:
@@ -93,13 +154,29 @@ class TapAssistParam:
     hold_ms:              float = 30.0
     seed:                 int   = None
 
-    def random(self):
-        self.strength             = random.uniform(0.3, 1.0)
-        self.jitter_ms            = random.uniform(0.0, 12.0)
-        self.rescue_chance        = random.uniform(0.0, 0.6)
-        self.rescue_radius_factor = random.uniform(1.0, 2.0)
-        self.hold_ms              = random.uniform(18.0, 40.0)
-        self.seed                 = random.randint(0, 2**31 - 1)
+    def random(self, difficulty: CheatDifficulty = None):
+        if difficulty is None:
+            self.strength             = random.uniform(0.3, 1.0)
+            self.jitter_ms            = random.uniform(0.0, 12.0)
+            self.rescue_chance        = random.uniform(0.0, 0.6)
+            self.rescue_radius_factor = random.uniform(1.0, 2.0)
+            self.hold_ms              = random.uniform(18.0, 40.0)
+        else:
+            match difficulty:
+                case CheatDifficulty.Easy:  # Blatant
+                    self.strength             = random.uniform(0.8, 1.0)
+                    self.jitter_ms            = random.uniform(0.0, 2.0)
+                    self.rescue_chance        = random.uniform(0.5, 0.8)
+                    self.rescue_radius_factor = random.uniform(1.5, 2.2)
+                    self.hold_ms              = random.uniform(25.0, 35.0)
+                case CheatDifficulty.Hard:  # Closet
+                    self.strength             = random.uniform(0.2, 0.5)
+                    self.jitter_ms            = random.uniform(4.0, 10.0)
+                    self.rescue_chance        = random.uniform(0.1, 0.3)
+                    self.rescue_radius_factor = random.uniform(1.0, 1.4)
+                    self.hold_ms              = random.uniform(15.0, 45.0)
+        
+        self.seed = random.randint(0, 2**31 - 1)
 
 
 def _validate_bd(bd, max_coord: float = 1e4, max_t: float = 120_000) -> bool:
@@ -197,7 +274,7 @@ class CheatSynth:
             self.tap_assist_param = tap_assist_param
 
 
-    def random_param(self):
+    def random_param(self, difficulty: CheatDifficulty = None):
         """
         Initialize randomly all parameters
         """
@@ -216,15 +293,15 @@ class CheatSynth:
             "autobot+relax", "autobot+tap_assist",
         ])
         if "autobot" in profile:
-            self.human_autobot_param = HumanAutobotParam(); self.human_autobot_param.random()
+            self.human_autobot_param = HumanAutobotParam(); self.human_autobot_param.random(difficulty)
         if "aim_assist" in profile:
-            self.aim_assist_param = AimAssistParam(); self.aim_assist_param.random()
+            self.aim_assist_param = AimAssistParam(); self.aim_assist_param.random(difficulty)
         if "aim_correction" in profile:
-            self.aim_correction_param = AimCorrectionParam(); self.aim_correction_param.random()
+            self.aim_correction_param = AimCorrectionParam(); self.aim_correction_param.random(difficulty)
         if "relax" in profile:
-            self.relax_param = RelaxParam(); self.relax_param.random()
+            self.relax_param = RelaxParam(); self.relax_param.random(difficulty)
         if "tap_assist" in profile:
-            self.tap_assist_param = TapAssistParam(); self.tap_assist_param.random()
+            self.tap_assist_param = TapAssistParam(); self.tap_assist_param.random(difficulty)
 
     def aim_assist(self, raw, bd):
         param = self.aim_assist_param
@@ -844,13 +921,25 @@ class CheatSynth:
         return True
 
 
-def process_cheat_file(osr_path: str, beatmap_path: str, output_folder: str):
+def process_cheat_file(osr_path: str, beatmap_path: str, output_folder: str, difficulty: CheatDifficulty = None):
     
     synth = CheatSynth()
     synth.init_replay(osr_path, beatmap_path, output_folder)
     
-    synth.random_param()
+    synth.random_param(difficulty)
     synth.synth_cheat(skip_invalid=True)
+
+def prepare_args(path: str, beatmap_folder: str):
+
+    with open(path, 'rb') as f:
+        replay_content = f.read()
+    map_hash, _ = get_beatmap_replay_hash(replay_content)
+    
+    beatmap_path = os.path.join(beatmap_folder, f"{map_hash}.osu")
+    if not os.path.exists(beatmap_path):
+        return None
+    
+    return path, beatmap_path
 
 def process_cheat_folder(
     replay_folder:  str, 
@@ -859,37 +948,35 @@ def process_cheat_folder(
     max_workers:    int   = None,
     timeout:        float = 2.0,
     limit:          int   = 100,
+    difficulty:     CheatDifficulty = None,
 ):
-
-    args = []
     print("Load dataset...")
 
     os.makedirs(output_folder, exist_ok=True)
-    if limit is None: limit = len(os.listdir(replay_folder))
     
-    pbar = tqdm(total=min(limit, len(os.listdir(replay_folder))))
-    for filename in os.listdir(replay_folder)[200_000:]:
-
-        replay_path = os.path.join(replay_folder, filename)
-
-        with open(replay_path, 'rb') as f:
-            replay_content = f.read()
-        map_hash, _ = get_beatmap_replay_hash(replay_content)
-
-        beatmap_path = os.path.join(beatmap_folder, f"{map_hash}.osu")
-            
-        if not os.path.exists(beatmap_path):
-            continue
-
-        args.append((replay_path, beatmap_path, output_folder))
-        pbar.update(1)
-
-        if pbar.n >= limit: break
+    paths = [(os.path.join(replay_folder, filename), beatmap_folder)
+             for filename in os.listdir(replay_folder)] 
+    
+    if limit is not None and limit < len(paths):
+        paths = paths[:limit]
+    
+    args = []
+    with ProcessPool(max_workers=max_workers or os.cpu_count()) as pool:
+        futures = [pool.schedule(prepare_args, args=a, timeout=timeout) for a in paths]
+        for fut in tqdm(as_completed(futures), total=len(futures)):
+            try:
+                result = fut.result()
+                if result is not None:
+                    args.append((*result, output_folder, difficulty))
+            except FutureTimeoutError:
+                pass
+            except Exception as e:
+                pass
     
     print("Process dataset...")
     with ProcessPool(max_workers=max_workers or os.cpu_count()) as pool:
         futures = [pool.schedule(process_cheat_file, args=a, timeout=timeout) for a in args]
-        for fut in tqdm(futures, total=len(futures)):
+        for fut in tqdm(as_completed(futures), total=len(futures)):
             try:
                 fut.result()
             except FutureTimeoutError:
@@ -907,8 +994,15 @@ if __name__ == "__main__":
     parser.add_argument("--output-folder",   help="The output folder for cheat .osr replay generate", required=True, type=str)
     parser.add_argument("--max-workers", default=None, required=False, type=int)
     parser.add_argument("--limit", help="Max cheat to generate", default=None, required=False, type=int)
+    parser.add_argument("--difficulty", choices=["easy", "hard"], default=None, help="Cheat difficulty level (easy = blatant, hard = closet)")
 
     args = parser.parse_args()
+
+    diff_val = None
+    if args.difficulty == "easy":
+        diff_val = CheatDifficulty.Easy
+    elif args.difficulty == "hard":
+        diff_val = CheatDifficulty.Hard
 
     process_cheat_folder(
         args.replays_folder, 
@@ -916,7 +1010,8 @@ if __name__ == "__main__":
         args.output_folder,
         max_workers=args.max_workers,
         timeout=2,
-        limit=args.limit
+        limit=args.limit,
+        difficulty=diff_val
     )
 
     #process_cheat_file(
