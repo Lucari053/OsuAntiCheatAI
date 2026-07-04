@@ -1,7 +1,7 @@
 # osu! std AI Cheat Detector
 
 [![Model](https://img.shields.io/badge/Model-HuggingFace-yellow)](https://huggingface.co/Lucari053/osu-CheatDetector-v0.1)
-[![License: MIT](https://img.shields.io/badge/Code%20License-MIT-green.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 The AI Cheat-Detector for osu! std is a Transformer-based sequence classification system design to detect cheats (including **Relax Hacks**, **Aim Assist**, **Aim Correction** and **Human Autobot**) that take replay frames and beatmap objects.
 
@@ -141,6 +141,12 @@ The AI Cheat-Detector for osu! std is a Transformer-based sequence classificatio
 └── requirements.txt         # Project dependencies list
 ```
 
+## Key Improvement
+
+- [ ] Better cheat-synth
+- [ ] Train model on "Hard mode" (very humanized cheat)
+- [ ] Test on verified cheat and legit play
+
 ## License
 
-- **Code & weight**: [MIT License](LICENSE)
+- **Code & weight**: [AGPL v3](LICENSE)
