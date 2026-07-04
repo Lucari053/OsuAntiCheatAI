@@ -149,7 +149,7 @@ class ZarrBeatmap(Zarr):
             self.processed_hashes = set(self.z_hash[:])
 
             self.current_ptr = int(self.z_indptr[-1])
-    
+        
     def __getitem__(self, key: str | int):
         idx = super().__getitem__(key)
 
@@ -205,7 +205,7 @@ class ZarrReplay(Zarr):
         if not exist:
             chunks_size = 10_000
             obj_len = len(ReplayFrame())
-            self.z_data    = self.root.create_dataset('data',    shape=(0, obj_len), chunks=(1_000_000, obj_len), dtype='float16')
+            self.z_data    = self.root.create_dataset('data',    shape=(0, obj_len), chunks=(100_000, obj_len), dtype='float16')
             self.z_hash    = self.root.create_dataset('hash',    shape=(0,),         chunks=(chunks_size,),         dtype='str')
             self.z_beatmap = self.root.create_dataset('beatmap', shape=(0,),         chunks=(chunks_size,),         dtype='str')
             self.z_mods    = self.root.create_dataset('mods',    shape=(0,),         chunks=(chunks_size,),         dtype='int32')

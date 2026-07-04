@@ -6,6 +6,7 @@ from tqdm import tqdm
 import shutil
 import subprocess
 import argparse
+import math
 
 from dataset.dataset import ReplaySequenceDataset, collate_replays
 from dataset.split import split_replays
@@ -204,7 +205,22 @@ def train(
             start_epoch = checkpoint_data['epoch']
             global_step = checkpoint_data.get('global_step', 0)
             best_f1 = checkpoint_data.get('best_f1', 0.0)
-            print(f"Resumed from epoch {start_epoch+1}, step {global_step} (best validation F1: {best_f1:.3f})")
+
+            # --- Recalculate learning rate to fix PyTorch's CosineAnnealingLR resume bug ---
+            
+            base_lr = float(Config.get("train/lr"))
+            if global_step < warmup_step:
+                factor = 0.01 + (global_step / warmup_step) * 0.99
+                restored_lr = base_lr * factor
+            else:
+                epoch = global_step - warmup_step
+                T_max = total_step - warmup_step
+                restored_lr = (1.0 + math.cos(math.pi * epoch / T_max)) / 2.0 * base_lr
+            for group in optimizer.param_groups:
+                group['lr'] = restored_lr
+
+            print(f"Resumed from epoch {start_epoch+1}, step {global_step} (best validation F1: {best_f1:.3f}), learning rate set to {restored_lr:.2e}")
+
         else:
             print(f"No checkpoint found at {checkpoint_file}, starting from scratch.")
 

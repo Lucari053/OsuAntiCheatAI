@@ -163,6 +163,7 @@ class PrepairPairs:
                     pass
                 except Exception as e:
                     print(e)
+            pair_dataset.flush_batch()
             
 
 

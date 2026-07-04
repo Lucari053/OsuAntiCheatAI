@@ -1,5 +1,8 @@
 # osu! std AI Cheat Detector
 
+[![Model](https://img.shields.io/badge/Model-HuggingFace-yellow)](https://huggingface.co/Lucari053/osu-CheatDetector-v0.1)
+[![License: MIT](https://img.shields.io/badge/Code%20License-MIT-green.svg)](LICENSE)
+
 The AI Cheat-Detector for osu! std is a Transformer-based sequence classification system design to detect cheats (including **Relax Hacks**, **Aim Assist**, **Aim Correction** and **Human Autobot**) that take replay frames and beatmap objects.
 
 > [!IMPORTANT]  
@@ -24,11 +27,14 @@ The AI Cheat-Detector for osu! std is a Transformer-based sequence classificatio
     CLIENT_SECRET=your_client_secret
     REDIRECT_URL=http://localhost
     ```
+4. **Download Pretrained Model:**
+
+    🤗 **[Model Link](https://huggingface.co/Lucari053/osu-CheatDetector-v0.1)**
 
 ## Prepare data
 1. **Download beatmaps & replays**
 
-    I recommand to use the [ordr dataset from skihikingkevin](https://www.kaggle.com/datasets/skihikingkevin/ordr-replay-dump), it offer 300k+ replays with beatmap.
+    I recommand to use the **[ordr dataset from skihikingkevin](https://www.kaggle.com/datasets/skihikingkevin/ordr-replay-dump)**, it offer 300k+ replays with beatmap.
 
     For cheating gameplay, you can generate it with
     ```bash
@@ -37,6 +43,9 @@ The AI Cheat-Detector for osu! std is a Transformer-based sequence classificatio
     --beatmaps-folder "{beatmaps_folder}" `
     --output-folder   "out/cheat_osr"
     ```
+
+---
+
 2. **Process beatmaps**
 
     ```bash
@@ -44,6 +53,8 @@ The AI Cheat-Detector for osu! std is a Transformer-based sequence classificatio
     --beatmaps-folder "{beatmaps_folder}" `
     --out-path        "out/beatmap.zarr"
     ```
+
+---
 
 3. **Process replays**
 
@@ -61,6 +72,8 @@ The AI Cheat-Detector for osu! std is a Transformer-based sequence classificatio
     --beatmap-zarr   "out/beatmap.zarr" `
     --out-path       "out/replay_cheat.zarr"
     ```
+
+---
 
 4. **Create pairs**
 
@@ -100,7 +113,34 @@ The AI Cheat-Detector for osu! std is a Transformer-based sequence classificatio
     ```
 
 ## How to run inference
-    
+
 ```bash
     python app.py
 ```
+
+## Repository Structure
+```
+├── configs/
+│   └── config.yaml          # Data generation, model hyperparameter and training config
+├── dataset/
+│   ├── dataset.py           # PyTorch Dataset
+│   ├── cheat_synth.py       # Algorithmic cheat synthesis (Relax, Aimbot, Aim Correction, Human Autobot)
+│   ├── split.py             # Deterministic train/validation hashes splitter
+│   ├── utils.py             # Zarr dataset read/write wrappers and dataclasses
+│   ├── mods.py              # Osu! mods support utilities
+│   └── prepaire_*.py        # Feature preprocessing pipelines for beatmaps and replays
+├── model/
+│   └── model.py             # CheatDetector architecture definition
+├── parser/
+│   ├── beatmap_parser.py    # Raw .osu parser
+│   ├── slidercalc.py        # Slider path sampling algorithms
+│   └── edit_osr.py          # .osr replay parser and editor
+├── train.py                 # Core training loop with logging and step validation
+├── infer.py                 # Inference script for real replay files
+├── app.py                   # Inference gradio interface
+└── requirements.txt         # Project dependencies list
+```
+
+## License
+
+- **Code & weight**: [MIT License](LICENSE)
