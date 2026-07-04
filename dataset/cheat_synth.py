@@ -283,7 +283,7 @@ class CheatSynth:
         self.relax_param = None
         self.human_autobot_param = None
 
-        # Compatibility
+        # Cheta Compatibility
         profile = random.choice([
             "aim_assist", "aim_correction", "relax", "tap_assist",
             "aim_assist+relax", "aim_correction+relax",
@@ -313,7 +313,7 @@ class CheatSynth:
                 acc += o.t
                 abs_real.append(acc)
 
-            W = param.assist_window  # fenêtre d'objets "actifs" autour de maintenant (ms)
+            W = param.assist_window
             replay_time = 0.0
             
             for i, frame in enumerate(frames):
@@ -325,53 +325,52 @@ class CheatSynth:
                 
                 replay_time += t
 
-                # Objets actifs = temps de hit dans [now - W, now + W]
+                # Active objects = time hit on [now - W, now + W]
                 lo = bisect.bisect_left(abs_real, replay_time - W)
                 hi = bisect.bisect_right(abs_real, replay_time + W)
 
-                # Le plus proche SPATIALEMENT du curseur (hors spinner)
+                # Nearest by cursor
                 best_d, target = None, None
                 for oi in range(lo, hi):
                     o = bd[oi]
-                    if o.object_type == 4:
+                    if o.object_type == 4: # Do not process spinner
                         continue
                     d = math.hypot(x - o.x, y - o.y)
                     if best_d is None or d < best_d:
                         best_d, target = d, o
                 
-                # Si aucune cible ou cible hors du champ de vision (FOV), on ignore
+
                 if target is None or param.fov <= 0 or best_d > param.fov:
                     continue
 
-                # 1. Lissage de l'activation (quadratique pour éviter un "snap" rigide sur les bords du FOV)
+                # Quadratic Smooth activation
                 activation = (1.0 - (best_d / param.fov)) ** 2
                 
-                # 2. Indépendance au framerate (delta time 't')
-                # On normalise par rapport à une frame standard d'environ 10ms
+                # Normalize frame rate
                 dt_norm = max(1.0, t) / 10.0
                 
-                # La force dépend maintenant du paramètre de base, de la proximité, et du temps écoulé
+                # Calcul force
                 pull = min(1.0, param.strength * activation * 0.15 * dt_norm)
 
                 dx = (target.x - x) * pull
                 dy = (target.y - y) * pull
                 disp = math.hypot(dx, dy)
                 
-                # 3. Vitesse maximale normalisée par le temps
+                # Maximum speed normalize by time
                 current_max_speed = param.max_speed * dt_norm
                 if disp > current_max_speed and disp > 0.0:
                     s = current_max_speed / disp
                     dx *= s
                     dy *= s
 
-                # 4. Bruit adaptatif (Humanisation)
+                # Add noise (humanized)
                 if param.humanization > 0:
-                    # Le bruit est proportionnel à la force d'attraction pour masquer l'assistance
+                    # Noise = proportional to pull force
                     noise = param.humanization * 2.5 * pull
                     dx += rng.gauss(0, noise)
                     dy += rng.gauss(0, noise)
 
-                # Application des modifications au curseur
+                # Apply force
                 frame[1] = round(x + dx, 3)
                 frame[2] = round(y + dy, 3)
 
@@ -386,7 +385,7 @@ class CheatSynth:
         landing = param.landing_factor * self.hit_radius
 
         def transform(frames):
-            # 1. Calcul des temps absolus (Map)
+            # Calcul absolute times
             abs_times = [0.0] * len(bd)
             acc = 0.0
             for i, obj in enumerate(bd):
@@ -403,7 +402,7 @@ class CheatSynth:
             
             clickable_times = [item[1] for item in clickable_data]
 
-            # 2. Extraction stricte des clics du joueur (Replay)
+            # Extract player click to next time aligned with target
             replay_time, prev_pressed = 0.0, False
             clicks = []
             
@@ -412,7 +411,6 @@ class CheatSynth:
                 if t == -12345:
                     continue
                 
-                # IMPORTANT: Toujours accumuler le temps pour rester synchro
                 replay_time += t
                 
                 if i < 2 and x == 256.0 and y == -500.0:
@@ -428,9 +426,9 @@ class CheatSynth:
             offsets_y = [0.0] * n_frames
             
             consumed_indices = set()
-            anchors = [] # Liste des keyframes: (frame_index, offset_x, offset_y)
+            anchors = [] # (frame_index, offset_x, offset_y)
 
-            # 3. Calcul de la correction REQUISE à l'instant exact du clic
+            # Calcul required correction when click
             for click_i, click_time, cx, cy in clicks:
                 idx = bisect.bisect_left(clickable_times, click_time)
                 
@@ -455,7 +453,7 @@ class CheatSynth:
                     
                 consumed_indices.add(best_global_idx)
                 
-                # Si déjà parfait, offset de zéro (mais on l'ajoute comme ancre pour protéger le stream)
+                # Already perfect
                 if best_dist <= tolerance:
                     anchors.append((click_i, 0.0, 0.0))
                     continue
@@ -464,14 +462,13 @@ class CheatSynth:
                 pull = ratio * param.strength
                 anchors.append((click_i, (best_obj.x - cx) * pull, (best_obj.y - cy) * pull))
 
-            # 4. Interpolation NON-ADDITIVE des offsets (LE correctif)
+            # Interpolation NON-ADDITIVE of offsets
             for idx in range(len(anchors)):
                 pos, ox, oy = anchors[idx]
                 
                 left_bound = pos - param.window
                 if idx > 0:
                     prev_pos = anchors[idx-1][0]
-                    # Si les clics sont proches, on les relie directement sans revenir à zéro
                     if pos - prev_pos <= 2 * param.window:
                         left_bound = prev_pos
                 
@@ -481,7 +478,7 @@ class CheatSynth:
                     if next_pos - pos <= 2 * param.window:
                         right_bound = next_pos
                 
-                # Lissage côté gauche (Fade In ou Interpolation avec le clic précédent)
+                # Smooth left side (Fade in)
                 if left_bound == pos - param.window:
                     for i in range(left_bound, pos):
                         if i < 0: continue
@@ -497,11 +494,11 @@ class CheatSynth:
                         offsets_x[i] = prev_ox * (1 - w) + ox * w
                         offsets_y[i] = prev_oy * (1 - w) + oy * w
                         
-                # Fixer le point d'impact exact
+                # Fix exact impact point
                 if 0 <= pos < n_frames:
                     offsets_x[pos] = ox; offsets_y[pos] = oy
                     
-                # Lissage côté droit (Fade Out seulement s'il n'y a pas d'autre clic direct après)
+                # Smooth right side (Fade Out)
                 if right_bound == pos + param.window:
                     for i in range(pos + 1, right_bound + 1):
                         if i >= n_frames: continue
@@ -509,7 +506,7 @@ class CheatSynth:
                         w = 0.5 * (1 + math.cos(math.pi * u))
                         offsets_x[i] = ox * w; offsets_y[i] = oy * w
 
-            # 5. Application Finale
+            # Apply force
             flow = param.flow
             prev_ox, prev_oy = 0.0, 0.0
             
@@ -537,15 +534,14 @@ class CheatSynth:
         K1, K2 = 4, 8
         CLICK_MASK = 1 | 2 | 4 | 8
 
-        # 1. Calcul des temps absolus (Map)
-        # FIX DT: On retire la division par self.rate ! Le temps est natif.
+        # Calcul absolute time
         abs_t = [0.0] * len(bd)
         acc = 0.0
         for i, obj in enumerate(bd):
             acc += obj.t
             abs_t[i] = acc
 
-        # 2. Générer les intervalles de clics désirés (Brut)
+        # Generate click intervals
         raw_presses = []
         i = 0
         while i < len(bd):
@@ -570,7 +566,7 @@ class CheatSynth:
             else:
                 i += 1
 
-        # 3. Nettoyer les intervalles (Appliquer Offset/Jitter)
+        # Clean intervals (Apply Offset/Jitter)
         presses = []
         for n, (t0, t1) in enumerate(raw_presses):
             start_t = t0 + param.offset_ms + rng.gauss(0, param.jitter_ms)
@@ -582,8 +578,8 @@ class CheatSynth:
             key = K1 if (not param.alternate or n % 2 == 0) else K2
             presses.append([start_t, end_t, key])
 
-        # FIX OVERLAP : Si un clic déborde sur le suivant, on le coupe net !
-        # Cela force un "front montant" (relâchement puis pression) indispensable pour valider un Hit.
+
+        # Release for next click
         for n in range(len(presses) - 1):
             current_start, current_end, current_key = presses[n]
             next_start, next_end, next_key = presses[n + 1]
@@ -596,7 +592,7 @@ class CheatSynth:
             vtimes = []
             acc = 0.0
             
-            # Extraction des temps du replay
+            # Extract times of replay
             for idx, fr in enumerate(frames):
                 if fr[0] == -12345:
                     continue
@@ -604,19 +600,17 @@ class CheatSynth:
                 valid.append(idx)
                 vtimes.append(acc)
             
-            # Effacer tous les clics originaux du joueur
+            # Remove all clicks
             for idx in valid:
                 frames[idx][3] &= ~CLICK_MASK
 
-            # Ré-injection chirurgicale des clics
+            # Inject new generate click
             for start_t, end_t, key in presses:
-                # bisect_left donne la PREMIÈRE frame qui survient au moment exact du start_t ou juste après.
-                # Fini les clics en avance à cause d'un mauvais arrondi vers la frame précédente.
+
                 v0 = bisect.bisect_left(vtimes, start_t)
                 hi = bisect.bisect_right(vtimes, end_t)
                 
-                # FIX VOID CLICKS : Si le clic est si court qu'aucune frame ne tombe dedans, 
-                # on force l'écriture sur au moins 1 frame pour que le jeu l'enregistre.
+                # Add a frame in replay for the click
                 if v0 == hi and v0 < len(vtimes):
                     hi += 1
                     
@@ -632,38 +626,35 @@ class CheatSynth:
         param = self.human_autobot_param
         rng = random.Random(param.seed)
 
-        # 1. Calcul des temps (FIX DT : Pas de division par self.rate)
+        # Calcul absolute time
         abs_t = [0.0] * len(bd)
         acc = 0.0
         for i, obj in enumerate(bd):
             acc += obj.t
             abs_t[i] = acc
 
-        # 2. Génération intelligente des Waypoints
+        # Waypoints generation
         wp_t, wp_x, wp_y = [], [], []
         prev_t = -1.0
         
         for idx, obj in enumerate(bd):
             if obj.object_type == 4:
-                continue  # Les spinners sont gérés à part
+                continue  # Don't process spinners here
 
             t_abs = abs_t[idx]
             
-            # FIX ALLER-RETOUR : Si deux objets ont le même timestamp (stack parfait),
-            # on décale artificiellement de 1ms pour empêcher l'interpolation de reculer.
+            # Offset 1.0 if two object are stack
             if t_abs <= prev_t:
                 t_abs = prev_t + 1.0
 
             dt = t_abs - prev_t if prev_t >= 0 else 1000.0
             
-            # FIX STREAMS : Réduit drastiquement l'erreur aléatoire (spread) 
-            # sur les objets rapprochés pour tracer des lignes droites.
+            # Reduce spread during streaming part
             current_spread = param.spread
             if dt < 120:
                 current_spread *= max(0.1, dt / 120.0)
                 
-            # Les ticks internes d'un slider (2) et les fins de sliders (3) 
-            # ne doivent presque pas avoir de spread pour éviter que le curseur ne tremble.
+            # Reduce spread at beggining and end of a slider
             if obj.object_type in (2, 3):
                 current_spread *= 0.2
 
@@ -676,7 +667,7 @@ class CheatSynth:
             
             prev_t = t_abs
 
-        # 3. Spinners (Inchangé)
+        # Spinners
         spinners, k = [], 0
         while k < len(bd):
             if bd[k].object_type == 4:
@@ -687,16 +678,13 @@ class CheatSynth:
             else:
                 k += 1
         
-        # 4. Interpolation avec ANTI-OVERSHOOT
+        # Inerpolation
         def hermite(p0, p1, p2, p3, u, cs):
             m1 = cs * (p2 - p0) * 0.5
             m2 = cs * (p3 - p1) * 0.5
             
-            # FIX FLICKS EXAGÉRÉS : Clamp des tangentes.
-            # L'élan mathématique (tangente) ne peut pas excéder 1.5x la distance réelle.
-            # Cela empêche les courbes de former des "noeuds papillons" entre deux objets proches.
             dist = abs(p2 - p1)
-            max_tan = dist * 1.5
+            max_tan = dist * 1.5 # Clamp frick
             if abs(m1) > max_tan: m1 = math.copysign(max_tan, m1)
             if abs(m2) > max_tan: m2 = math.copysign(max_tan, m2)
 
@@ -720,7 +708,7 @@ class CheatSynth:
                 
                 T = ft[idx]
 
-                # Rendu Spinner
+                # Spinner
                 spin = next(((s0, cx, cy) for (s0, s1, cx, cy) in spinners if s0 <= T <= s1), None)
                 if spin is not None:
                     s0, cx, cy = spin
@@ -729,7 +717,6 @@ class CheatSynth:
                     fr[2] = round(cy + math.sin(ang) * param.spin_radius, 3)
                     continue
                 
-                # Rendu standard
                 if n == 0: 
                     continue
                 if T <= wp_t[0]:
@@ -742,7 +729,6 @@ class CheatSynth:
                 j = bisect.bisect_right(wp_t, T) - 1
                 t0, t1 = wp_t[j], wp_t[j + 1]
                 
-                # Sécurité anti-division par zéro
                 u = (T - t0) / (t1 - t0) if t1 > t0 else 0.0
 
                 i0, i3 = max(0, j - 1), min(n - 1, j + 2)
@@ -755,106 +741,8 @@ class CheatSynth:
 
     def tap_assist(self, raw, bd):
         param = self.tap_assist_param
-        rng = random.Random(param.seed)
-        PRESS_MASK = 1 | 2 | 4 | 8
-
-        abs_t, acc = [], 0.0
-        for obj in bd:
-            acc += obj.t
-            abs_t.append(acc)
-
-        clickable_times, clickable_objs = [], []
-        for idx, obj in enumerate(bd):
-            if obj.object_type in (0, 1):
-                clickable_times.append(abs_t[idx])
-                clickable_objs.append(obj)
 
         def transform(frames):
-            valid, vtimes, acc = [], [], 0.0
-            for idx, fr in enumerate(frames):
-                if fr[0] == -12345:
-                    continue
-                acc += fr[0]
-                valid.append(idx)
-                vtimes.append(acc)
-
-            def cursor_at(t):
-                v = min(range(len(vtimes)), key=lambda i: abs(vtimes[i] - t))
-                fr = frames[valid[v]]
-                return fr[1], fr[2]
-
-            presses = []
-            press_start, press_bits = None, 0
-            for v, idx in enumerate(valid):
-                bits = frames[idx][3] & PRESS_MASK
-                if bits and press_start is None:
-                    press_start, press_bits = vtimes[v], bits
-                elif not bits and press_start is not None:
-                    presses.append((press_start, vtimes[v], press_bits))
-                    press_start, press_bits = None, 0
-            if press_start is not None:
-                presses.append((press_start, vtimes[-1], press_bits))
-
-            matched = set()
-            shifts = []
-            for start, end, bits in presses:
-                j = bisect.bisect_left(clickable_times, start)
-                best = None
-                for cand in (j - 1, j):
-                    if 0 <= cand < len(clickable_times):
-                        dt = abs(clickable_times[cand] - start)
-                        if best is None or dt < best[0]:
-                            best = (dt, cand)
-                if best is None or best[0] > self.hit_window:
-                    continue
-
-                matched.add(best[1])
-                ideal_time = clickable_times[best[1]]
-                hold = end - start
-                new_start = start + (ideal_time - start) * param.strength + rng.gauss(0, param.jitter_ms)
-                shifts.append((start, end, new_start, new_start + hold, bits))
-
-            # Secours sur quasi-raté : clickable jamais matché, curseur proche au bon moment
-            for ci, (t_ideal, target) in enumerate(zip(clickable_times, clickable_objs)):
-                if ci in matched:
-                    continue
-                if rng.random() >= param.rescue_chance:
-                    continue
-
-                cx, cy = cursor_at(t_ideal)
-                if math.hypot(cx - target.x, cy - target.y) > self.hit_radius * param.rescue_radius_factor:
-                    continue  # trop loin, même un vrai cheat ne cliquerait pas n'importe où
-
-                new_start = t_ideal + rng.gauss(0, param.jitter_ms)
-                shifts.append((None, None, new_start, new_start + param.hold_ms, Key.K1.value))
-
-            # Efface les appuis déplacés (les secours n'ont pas d'ancien intervalle)
-            for old_start, old_end, _, _, bits in shifts:
-                if old_start is None:
-                    continue
-                lo = bisect.bisect_left(vtimes, old_start)
-                hi = bisect.bisect_right(vtimes, old_end)
-                for v in range(lo, hi):
-                    frames[valid[v]][3] &= ~bits
-
-            shifts.sort(key=lambda s: s[2])  # par new_start
-            shifts.sort(key=lambda s: s[2])
-            for _, _, new_start, new_end, bits in shifts:
-                # front montant = frame la PLUS PROCHE de new_start (supprime le biais retard)
-                v0 = bisect.bisect_left(vtimes, new_start)
-                if v0 > 0 and (v0 >= len(vtimes) or
-                            abs(vtimes[v0 - 1] - new_start) < abs(vtimes[v0] - new_start)):
-                    v0 -= 1
-                hi = max(bisect.bisect_right(vtimes, new_end), v0 + 1)
-
-                # front montant garanti (anti-fusion burst)
-                if v0 - 1 >= 0:
-                    frames[valid[v0 - 1]][3] &= ~bits
-                for v in range(v0, hi):
-                    frames[valid[v]][3] |= bits
-
-                for v in range(lo, hi):
-                    frames[valid[v]][3] |= bits
 
             return frames
 
@@ -903,8 +791,8 @@ class CheatSynth:
         if self.relax_param is not None:
             raw = self.relax(raw, bd)
         # Disable for now, because not perform well, need improvment
-        #elif self.tap_assist_param is not None:
-        #    raw = self.tap_assist(raw, bd)
+        # elif self.tap_assist_param is not None:
+        #     raw = self.tap_assist(raw, bd)
 
         # Generate unique hash for the modified replay
         new_hash = get_beatmap_hash(raw)
